@@ -1,1 +1,1 @@
-Solicitud de prueba de workflow_dispatch de P10, modo detallado y generar_informe=true. Sin credenciales.
+Repetir prueba real workflow_dispatch: modo=detallado y generar_informe=true; comando corregido para repo explícito.
