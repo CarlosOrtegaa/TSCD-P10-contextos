@@ -1,0 +1,123 @@
+name: P10 - Contextos de GitHub Actions
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+    inputs:
+      modo:
+        description: 'Nivel de detalle del informe (sin datos sensibles)'
+        required: true
+        type: choice
+        options: [resumen, detallado]
+        default: resumen
+      generar_informe:
+        description: 'Generar un artefacto de texto con los resultados'
+        required: true
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+env:
+  NOMBRE_PRACTICA: P10-contextos
+
+jobs:
+  preparar:
+    name: Preparar diagnóstico
+    runs-on: ubuntu-22.04
+    outputs:
+      modo: ${{ steps.config.outputs.modo }}
+      evento: ${{ steps.config.outputs.evento }}
+    steps:
+      - name: Leer parámetros del evento
+        id: config
+        env:
+          EVENTO: ${{ github.event_name }}
+          MODO_MANUAL: ${{ inputs.modo }}
+        run: |
+          set -euo pipefail
+          if [[ "$EVENTO" == "workflow_dispatch" ]]; then
+            MODO="$MODO_MANUAL"
+          else
+            MODO="resumen"
+          fi
+          [[ "$MODO" == "resumen" || "$MODO" == "detallado" ]]
+          printf 'modo=%s\n' "$MODO" >> "$GITHUB_OUTPUT"
+          printf 'evento=%s\n' "$EVENTO" >> "$GITHUB_OUTPUT"
+          echo "Configuración revisada: modo=$MODO"
+
+  diagnostico:
+    name: Comprobar contextos
+    needs: preparar
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        comprobacion: [metadata, estado]
+    steps:
+      - name: Resumen seguro de contexto
+        env:
+          EVENTO: ${{ github.event_name }}
+          RAMA: ${{ github.ref_name }}
+          REPOSITORIO: ${{ github.repository }}
+          SISTEMA: ${{ runner.os }}
+          ARQUITECTURA: ${{ runner.arch }}
+          MODO: ${{ needs.preparar.outputs.modo }}
+          PRUEBA: ${{ matrix.comprobacion }}
+          CONFIGURACION: ${{ vars.ETIQUETA_ENTORNO || 'sin-configurar' }}
+          NOMBRE: ${{ env.NOMBRE_PRACTICA }}
+        run: |
+          set -euo pipefail
+          echo "Práctica: $NOMBRE"
+          echo "Evento: $EVENTO; rama: $RAMA"
+          echo "Repositorio: $REPOSITORIO"
+          echo "Runner: $SISTEMA/$ARQUITECTURA"
+          echo "Tipo de comprobación: $PRUEBA; modo: $MODO"
+          echo "Variable de repositorio (no sensible): $CONFIGURACION"
+      - name: Información adicional solo en ejecución manual
+        if: ${{ github.event_name == 'workflow_dispatch' && needs.preparar.outputs.modo == 'detallado' && matrix.comprobacion == 'metadata' }}
+        env:
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          echo "Ejecución: $RUN_ID; intento: $RUN_ATTEMPT"
+      - name: Verificar conclusión del paso anterior
+        id: verificacion
+        run: |
+          echo "Se han validado los campos permitidos para los logs"
+      - name: Mostrar estado del paso
+        if: ${{ steps.verificacion.conclusion == 'success' }}
+        run: echo "El paso de verificación finalizó correctamente"
+
+  informe:
+    name: Guardar informe seguro
+    needs: [preparar, diagnostico]
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.generar_informe }}
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Crear informe con campos seleccionados
+        env:
+          EVENTO: ${{ needs.preparar.outputs.evento }}
+          MODO: ${{ needs.preparar.outputs.modo }}
+          SO: ${{ runner.os }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          mkdir -p salida
+          {
+            echo 'Práctica P10 - Diagnóstico de contextos'
+            echo "Evento: $EVENTO"
+            echo "Modo: $MODO"
+            echo "Sistema operativo: $SO"
+            echo "Repositorio: $REPO"
+            echo 'No se imprimen tokens, secretos ni el evento completo.'
+          } > salida/diagnostico.txt
+      - name: Publicar artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: diagnostico-contextos
+          path: salida/diagnostico.txt
+          retention-days: 7
