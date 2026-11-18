@@ -1,1 +1,1 @@
-Repetir prueba real workflow_dispatch: modo=detallado y generar_informe=true; comando corregido para repo explícito.
+Solicitar prueba workflow_dispatch con modo=detallado y generar_informe=false para verificar que el informe se omite.
