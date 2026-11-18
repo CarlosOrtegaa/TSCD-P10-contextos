@@ -14,5 +14,5 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh workflow run contextos.yml --ref main -f modo=detallado -f generar_informe=true
+          gh workflow run contextos.yml --repo "$GITHUB_REPOSITORY" --ref main -f modo=detallado -f generar_informe=true
           echo 'Se ha solicitado una ejecución manual con modo=detallado e informe habilitado.'
